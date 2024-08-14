@@ -5,4 +5,5 @@ dash-core-components==2.0.0
 dash-html-components==2.0.0
 dash-table==5.0.0
 nsepython==0.0.973
+flask-caching
 gunicorn
