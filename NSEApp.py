@@ -183,4 +183,9 @@ def health_check():
 # Run the app
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8080))
-    app.run_server(debug=False, host='0.0.0.0', port=port)
+    log_message(f"Starting server on port {port}")
+    server.run(host='0.0.0.0', port=port, debug=True)
+else:
+    log_message("Application is being imported, not run directly")
+
+log_message(f"Application setup complete. PORT={os.environ.get('PORT', 'Not set')}")
