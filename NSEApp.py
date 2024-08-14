@@ -176,6 +176,10 @@ def download_as_excel(n_clicks):
     df = get_stock_data()
     return dcc.send_data_frame(df.to_excel, "NSE_Stocks_Sorted_by_52_Week_High.xlsx", index=False)
 
+# Add a simple route for testing
+@server.route('/health')
+def health_check():
+    return "Server is running!", 200
 # Run the app
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8080))
