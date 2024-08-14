@@ -1,15 +1,26 @@
-# Import necessary libraries
+import os
 from dash import Dash, dcc, html, dash_table
 from dash.dependencies import Input, Output
 import pandas as pd
 from nsepython import nsefetch
 import io
 import base64
+import time
+import functools
+from flask_caching import Cache
 
 # Initialize the Dash app
 app = Dash(__name__)
+server = app.server  # Expose the server variable for Gunicorn
+
+# Set up Flask-Caching
+cache = Cache(app.server, config={'CACHE_TYPE': 'SimpleCache'})
+
+# Cache timeout (in seconds)
+CACHE_TIMEOUT = 5 * 5  # Cache for 5 minutes
 
 # Function to get stock data from all indices
+@cache.memoize(timeout=CACHE_TIMEOUT)
 def get_all_indices_data():
     indices = [
         "NIFTY 50", "NIFTY NEXT 50", "NIFTY MIDCAP 50", "NIFTY SMALLCAP 100", 
@@ -32,6 +43,7 @@ def get_all_indices_data():
     return combined_df
 
 # Function to process the stock data and sort by 52-Week High
+@functools.lru_cache(maxsize=1)
 def get_stock_data():
     df = get_all_indices_data()
     
@@ -92,7 +104,17 @@ def generate_excel_download_link(df):
 
 # Layout of the Dash app
 app.layout = html.Div([
-    html.H1("NSE All Index Stocks Sorted by 52-Week High"),
+    html.H1("NSE Stocks Sorted by 52-Week High"),
+    
+    # Dropdown to filter by stock symbol
+    dcc.Dropdown(
+        id='symbol-dropdown',
+        options=[{'label': symbol, 'value': symbol} for symbol in get_stock_data()['symbol'].unique()],
+        placeholder="Select a stock symbol",
+        multi=False,
+        searchable=True,
+        clearable=True
+    ),
     
     # Button to download the data as Excel
     html.Button("Download as Excel", id="btn-download"),
@@ -101,7 +123,7 @@ app.layout = html.Div([
     # Interval component for live refresh
     dcc.Interval(
         id='interval-component',
-        interval=5*1000,  # Refresh every minute
+        interval=60*1000,  # Refresh every minute
         n_intervals=0
     ),
     
@@ -125,20 +147,24 @@ app.layout = html.Div([
             {'name': 'VWAP', 'id': 'vwap'}
         ],
         data=get_stock_data().to_dict('records'),
-        page_size=50,  # Number of rows per page
+        page_size=20,  # Number of rows per page
         page_action='native',  # Handle pagination natively
         style_table={'overflowX': 'auto'},
         style_cell={'textAlign': 'left'},
     )
 ])
 
-# Callback to update the data table at every interval
+# Callback to update the data table based on dropdown selection
 @app.callback(
     Output('stock-table', 'data'),
+    Input('symbol-dropdown', 'value'),
     Input('interval-component', 'n_intervals')
 )
-def update_table(n):
-    return get_stock_data().to_dict('records')
+def update_table(selected_symbol, n):
+    df = get_stock_data()
+    if selected_symbol:
+        df = df[df['symbol'] == selected_symbol]
+    return df.to_dict('records')
 
 # Callback to export data to Excel
 @app.callback(
@@ -152,5 +178,5 @@ def download_as_excel(n_clicks):
 
 # Run the app
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8050))
-    app.run_server(debug=True, host='0.0.0.0', port=port)
+    port = int(os.environ.get("PORT", 8080))
+    app.run_server(debug=False, host='0.0.0.0', port=port)
